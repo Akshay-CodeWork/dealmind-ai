@@ -7,27 +7,29 @@ export interface LegalExtraction {
 }
 
 // Client-side mock legal extraction from PDF text
-// In production this would call Groq + Pinecone
 export function extractLegalFields(text: string): LegalExtraction {
-  const borrowerMatch = text.match(
-    /(?:borrower|party|company|entity)[:\s]*["']?([A-Z][A-Za-z\s&.,]+?)(?:["'\n,;(]|herein)/i
-  );
-  const amountMatch = text.match(
-    /(?:loan|principal|amount|sum)[:\s]*\$?([\d,]+(?:\.\d{2})?)/i
-  );
-  const maturityMatch = text.match(
-    /(?:maturity|expir(?:y|ation)|due)\s*(?:date)?[:\s]*([\w\s,]+?\d{4})/i
-  );
-  const agreementMatch = text.match(
-    /(?:agreement|effective|dated|executed)\s*(?:date|on|as of)?[:\s]*([\w\s,]+?\d{4})/i
-  );
+  // 1. Normalize the messy PDF text (collapse multiple spaces and newlines into single spaces)
+  const cleanText = text.replace(/[\r\n]+/g, ' ').replace(/\s{2,}/g, ' ').trim();
+
+  // 2. Ultra-forgiving Regexes
+  // Looks for Borrower/Company/Party followed by caps, stopping at common separators
+  const borrowerMatch = cleanText.match(/(?:borrower|party|company|entity)[\s:]*["']?([A-Z][a-zA-Z\s&.,]+?)(?:["',;(]| herein| is a| a | organized)/i);
+
+  // Looks for any dollar amount over 1,000 to confidently catch the loan amount
+  const amountMatch = cleanText.match(/(?:loan|principal|amount|sum|facility|commitment)[\s:]*(?:usd|\$)?\s*([\d,]{4,}(?:\.\d{2})?)/i) || cleanText.match(/\$\s*([\d,]{4,}(?:\.\d{2})?)/);
+
+  // Looks for standard date formats near the words Maturity, Due, or Expiration
+  const maturityMatch = cleanText.match(/(?:maturity|due|expiration)[\s]*(?:date)?[\s:]*([a-zA-Z]+\s+\d{1,2},?\s+\d{4}|\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4})/i);
+
+  // Looks for standard date formats near Agreement, Effective, or Dated as of
+  const agreementMatch = cleanText.match(/(?:agreement|effective|dated)[\s]*(?:date|as of|on)?[\s:]*([a-zA-Z]+\s+\d{1,2},?\s+\d{4}|\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4})/i);
 
   return {
     borrower_name: borrowerMatch?.[1]?.trim() || "Not Found",
     loan_amount: amountMatch ? parseFloat(amountMatch[1].replace(/,/g, "")) : 0,
     maturity_date: parseDate(maturityMatch?.[1]?.trim() || ""),
     agreement_date: parseDate(agreementMatch?.[1]?.trim() || ""),
-    raw_text: text.substring(0, 500),
+    raw_text: text.substring(0, 1500), // Show more raw text in the UI for debugging
   };
 }
 
@@ -36,7 +38,7 @@ function parseDate(dateStr: string): string {
   try {
     const d = new Date(dateStr);
     if (isNaN(d.getTime())) return dateStr;
-    return d.toISOString().split("T")[0];
+    return d.toISOString().split("T")[0]; // Format to YYYY-MM-DD
   } catch {
     return dateStr;
   }
