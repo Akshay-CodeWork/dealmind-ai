@@ -7,10 +7,14 @@ import { Button } from "@/components/ui/button";
 import { ArrowRight, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import Papa from "papaparse";
-import * as pdfjsLib from "pdfjs-dist";
 
-// Set up the PDF.js worker so it can parse PDFs in the browser
-pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
+// @ts-ignore - Ignore TS error for missing types
+import * as pdfjsLib from "pdfjs-dist";
+// @ts-ignore - Vite specific URL import to securely load the local worker
+import pdfWorker from "pdfjs-dist/build/pdf.worker.mjs?url";
+
+// Set up the PDF.js worker using the local Vite-bundled file
+pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorker;
 
 export default function UploadPage() {
   const [feFile, setFeFile] = useState<File | null>(null);
@@ -112,7 +116,6 @@ function parseCSV(file: File): Promise<Record<string, string>[]> {
   });
 }
 
-// Updated to handle both PDF and plain text correctly
 async function readFileAsText(file: File): Promise<string> {
   if (file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf")) {
     try {
@@ -125,7 +128,8 @@ async function readFileAsText(file: File): Promise<string> {
       for (let i = 1; i <= pdf.numPages; i++) {
         const page = await pdf.getPage(i);
         const textContent = await page.getTextContent();
-        const pageText = textContent.items.map((item: any) => item.str).join(" ");
+        // @ts-ignore
+        const pageText = textContent.items.map((item) => item.str).join(" ");
         fullText += pageText + "\n";
       }
       return fullText;
@@ -134,7 +138,7 @@ async function readFileAsText(file: File): Promise<string> {
       throw new Error("Failed to parse PDF document.");
     }
   } else {
-    // For .txt files, keep using standard FileReader
+    // For .txt files
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.onload = () => resolve(reader.result as string);
