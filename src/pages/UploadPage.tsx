@@ -10,11 +10,10 @@ import Papa from "papaparse";
 
 // @ts-ignore - Ignore TS error for missing types
 import * as pdfjsLib from "pdfjs-dist";
-// @ts-ignore - Vite specific URL import to securely load the local worker
-import pdfWorker from "pdfjs-dist/build/pdf.worker.mjs?url";
 
-// Set up the PDF.js worker using the local Vite-bundled file
-pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorker;
+// Fix: Force the application to use a highly-available CDN for the worker
+// This completely bypasses Netlify's inability to serve local .mjs files
+pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
 
 export default function UploadPage() {
   const [feFile, setFeFile] = useState<File | null>(null);
