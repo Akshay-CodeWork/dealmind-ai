@@ -7,6 +7,10 @@ import { Button } from "@/components/ui/button";
 import { ArrowRight, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import Papa from "papaparse";
+import * as pdfjsLib from "pdfjs-dist";
+
+// Set up the PDF.js worker so it can parse PDFs in the browser
+pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
 
 export default function UploadPage() {
   const [feFile, setFeFile] = useState<File | null>(null);
@@ -35,6 +39,7 @@ export default function UploadPage() {
       toast.success("Files uploaded and parsed successfully!");
       navigate("/cleaning");
     } catch (err) {
+      console.error(err);
       toast.error("Failed to parse files. Please check the format.");
     } finally {
       setLoading(false);
@@ -107,11 +112,34 @@ function parseCSV(file: File): Promise<Record<string, string>[]> {
   });
 }
 
-function readFileAsText(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result as string);
-    reader.onerror = reject;
-    reader.readAsText(file);
-  });
+// Updated to handle both PDF and plain text correctly
+async function readFileAsText(file: File): Promise<string> {
+  if (file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf")) {
+    try {
+      const arrayBuffer = await file.arrayBuffer();
+      // Load the PDF document
+      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+      let fullText = "";
+
+      // Loop through each page to extract text
+      for (let i = 1; i <= pdf.numPages; i++) {
+        const page = await pdf.getPage(i);
+        const textContent = await page.getTextContent();
+        const pageText = textContent.items.map((item: any) => item.str).join(" ");
+        fullText += pageText + "\n";
+      }
+      return fullText;
+    } catch (error) {
+      console.error("Error extracting PDF text:", error);
+      throw new Error("Failed to parse PDF document.");
+    }
+  } else {
+    // For .txt files, keep using standard FileReader
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsText(file);
+    });
+  }
 }
